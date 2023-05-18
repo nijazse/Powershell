@@ -1,0 +1,16 @@
+$taskPath = "\SamplePath\"  # Replace with the actual folder path
+$taskNames = Get-ScheduledTask -TaskPath $taskPath | Select-Object -ExpandProperty TaskName #Pull All task names under taskPath
+
+# Iterate through each task name
+foreach ($TaskName in $TaskNames) {
+    Write-Host "Task Name: $TaskName"
+    # Get the task actions
+    $TaskActions = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
+    $TaskActions.Actions
+
+    # Display the task actions
+    foreach ($Action in $TaskActions) {
+        Write-Host "Action: $Action"
+    }
+    Write-Host
+}
