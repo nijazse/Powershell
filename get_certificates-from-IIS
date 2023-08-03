@@ -1,0 +1,121 @@
+# Set the constant password for the PFX files
+$password = "kikiriki"
+
+
+
+# Get all certificates from the LocalMachine\My store
+$certificates = Get-ChildItem -Path Cert:\LocalMachine\My
+
+
+
+# Specify the export directory
+$exportDirectory = "C:\Cert\"
+
+
+
+foreach ($certificate in $certificates) {
+    # Try to get the Subject Alternative Name (SAN) extension, which might contain the domain(s)
+    $domains = $certificate.Extensions | Where-Object { $_.Oid.FriendlyName -eq "Subject Alternative Name" } | ForEach-Object {
+        $_.Format(0) -replace "DNS Name=", ""
+    }
+
+
+
+    # If the SAN is not available, use the Subject field (common name) for the domain
+    if (-not $domains) {
+        $commonName = $certificate.Subject -replace ".*CN=(.*?)(?:,|$)", '$1'
+        $domains = @($commonName)
+    }
+
+
+
+    # Remove any invalid characters from the domain to create a valid folder name
+    foreach ($domain in $domains) {
+        # Remove the leading dot (.) from the domain name if it exists
+        $domain = $domain -replace '^\.'
+        
+        # Split the domain using spaces (the assumption is that the domain part is the first element)
+        $domainParts = $domain -split ' '
+
+
+
+        # Get the domain part (e.g., "miki.com")
+        $domainPart = $domainParts[0] -replace '[\\\/:*?"<>|,]', ''
+
+
+
+        # Get the Issuer name (e.g., "CN=IssuerName, OU=Org Unit, O=Organization, C=US")
+        $issuerName = $certificate.IssuerName.Name
+
+
+
+        # Remove invalid characters from the Issuer name to create a valid filename
+        $issuerName = $issuerName -replace '[\\\/:*?"<>|,]', ''
+
+
+
+        # Create the subfolder path using the domain and issuer parts
+        $subfolderPath = Join-Path -Path $exportDirectory -ChildPath "$domainPart\$issuerName"
+
+
+
+        # Create the full subfolder path
+        if (-not (Test-Path -Path $subfolderPath -PathType Container)) {
+            New-Item -ItemType Directory -Path $subfolderPath | Out-Null
+        }
+
+
+
+        # Use the FriendlyName of the certificate as the filename
+        $exportFileName = $certificate.FriendlyName -replace '[\\\/:*?"<>|]', '' # Remove any invalid characters
+
+
+
+        $exportPath = Join-Path -Path $subfolderPath -ChildPath ($exportFileName + ".pfx")
+
+
+
+        try {
+            Export-PfxCertificate -Cert $certificate.PSPath -FilePath $exportPath -Password (ConvertTo-SecureString -String $password -AsPlainText -Force)
+            Write-Host "Certificate with Thumbprint $($certificate.Thumbprint) successfully exported to: $exportPath"
+        } catch {
+            Write-Host "Error exporting certificate with Thumbprint $($certificate.Thumbprint): $_"
+        }
+    }
+}
+
+
+
+function Get-FilesCount {
+    param (
+        [string]$FolderPath
+    )
+
+
+
+    if (-not (Test-Path $FolderPath -PathType Container)) {
+        Write-Host "Invalid folder path: $FolderPath" -ForegroundColor Red
+        return
+    }
+
+
+
+    $fileCount = 0
+
+
+
+    Get-ChildItem -Path $FolderPath -Recurse -File | ForEach-Object {
+        $fileCount++
+    }
+
+
+
+    Write-Host "Total number of files in $FolderPath and its subfolders: $fileCount" -ForegroundColor Green
+}
+
+
+
+# Example: Provide the path to the folder you want to count the files for.
+$folderPath = "C:\Cert\"
+Get-FilesCount -FolderPath $folderPath
+ 
